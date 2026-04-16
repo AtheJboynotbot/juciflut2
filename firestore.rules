@@ -1,0 +1,130 @@
+rules_version = '2';
+
+service cloud.firestore {
+  match /databases/{database}/documents {
+    
+    // =========================================================================
+    // HELPER FUNCTIONS
+    // =========================================================================
+    
+    // Check if user is authenticated
+    function isAuthenticated() {
+      return request.auth != null;
+    }
+    
+    // Get authenticated user's email
+    function getUserEmail() {
+      return request.auth.token.email;
+    }
+    
+    // Check if the authenticated user owns this faculty document
+    function isFacultyOwner(facultyData) {
+      return isAuthenticated() && facultyData.email == getUserEmail();
+    }
+    
+    // Validate faculty profile data
+    function isValidFacultyData(data) {
+      return data.keys().hasAll(['email', 'first_name', 'last_name']) &&
+             data.email is string && data.email.size() > 0 &&
+             data.first_name is string && data.first_name.size() > 0 &&
+             data.last_name is string && data.last_name.size() > 0 &&
+             // Optional fields validation
+             (!('department_id' in data) || data.department_id is string) &&
+             (!('availability_status' in data) || data.availability_status in ['available', 'busy', 'away']) &&
+             (!('profile_image_url' in data) || data.profile_image_url is string) &&
+             (!('phone_number' in data) || data.phone_number is string) &&
+             (!('office_location' in data) || data.office_location is string) &&
+             (!('date_of_birth' in data) || data.date_of_birth is string);
+    }
+    
+    // Validate schedule data
+    function isValidScheduleData(data) {
+      return data.keys().hasAll(['faculty_id', 'day', 'time_start', 'time_end', 'type']) &&
+             data.faculty_id is string && data.faculty_id.size() > 0 &&
+             data.day is string && data.day in ['Monday', 'Tuesday', 'Wednesday', 'Thursday', 'Friday', 'Saturday', 'Sunday'] &&
+             data.time_start is string && data.time_start.size() > 0 &&
+             data.time_end is string && data.time_end.size() > 0 &&
+             data.type is string && data.type in ['consultation', 'class', 'meeting', 'office_hours'] &&
+             // Optional fields validation
+             (!('title' in data) || data.title is string) &&
+             (!('location' in data) || data.location is string) &&
+             (!('isBooked' in data) || data.isBooked is bool) &&
+             (!('student_email' in data) || data.student_email is string) &&
+             (!('createdAt' in data) || data.createdAt is timestamp);
+    }
+    
+    // =========================================================================
+    // FACULTY COLLECTION RULES
+    // =========================================================================
+    
+    match /faculty/{facultyId} {
+      // Allow read if user is authenticated AND the document email matches their auth email
+      allow read: if isAuthenticated() && 
+                     resource.data.email == getUserEmail();
+      
+      // Allow create if user is authenticated AND they're creating their own profile
+      allow create: if isAuthenticated() && 
+                       request.resource.data.email == getUserEmail() &&
+                       isValidFacultyData(request.resource.data);
+      
+      // Allow update if user owns the document AND validation passes
+      // User can only update their own profile, cannot change email
+      allow update: if isFacultyOwner(resource.data) && 
+                       request.resource.data.email == resource.data.email &&
+                       isValidFacultyData(request.resource.data);
+      
+      // Allow delete if user owns the document
+      allow delete: if isFacultyOwner(resource.data);
+    }
+    
+    // =========================================================================
+    // SCHEDULES COLLECTION RULES
+    // =========================================================================
+    
+    match /schedules/{scheduleId} {
+      // Helper to check if faculty_id belongs to authenticated user
+      // Verifies that the faculty document with faculty_id has matching email
+      function isFacultySchedule(facultyId) {
+        return isAuthenticated() && 
+               exists(/databases/$(database)/documents/faculty/$(facultyId)) &&
+               get(/databases/$(database)/documents/faculty/$(facultyId)).data.email == getUserEmail();
+      }
+      
+      // Allow read if the schedule's faculty_id belongs to authenticated user
+      allow read: if isFacultySchedule(resource.data.faculty_id);
+      
+      // Allow create if user is creating a schedule for their own faculty profile
+      allow create: if isValidScheduleData(request.resource.data) &&
+                       isFacultySchedule(request.resource.data.faculty_id);
+      
+      // Allow update if schedule belongs to user AND validation passes
+      // Cannot change faculty_id (prevent schedule hijacking)
+      allow update: if isFacultySchedule(resource.data.faculty_id) &&
+                       request.resource.data.faculty_id == resource.data.faculty_id &&
+                       isValidScheduleData(request.resource.data);
+      
+      // Allow delete if schedule belongs to user
+      allow delete: if isFacultySchedule(resource.data.faculty_id);
+    }
+    
+    // =========================================================================
+    // DEPARTMENTS COLLECTION RULES
+    // =========================================================================
+    
+    match /departments/{departmentId} {
+      // Anyone authenticated can read departments (reference data)
+      allow read: if isAuthenticated();
+      
+      // Only allow writes through admin console (no client writes)
+      allow write: if false;
+    }
+    
+    // =========================================================================
+    // CATCH-ALL RULE - Deny everything else
+    // =========================================================================
+    
+    match /{document=**} {
+      allow read, write: if false;
+    }
+  }
+}

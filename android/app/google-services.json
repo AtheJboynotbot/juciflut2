@@ -1,0 +1,76 @@
+{
+  "project_info": {
+    "project_number": "614451079097",
+    "project_id": "facconsult-19071",
+    "storage_bucket": "facconsult-19071.firebasestorage.app"
+  },
+  "client": [
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614451079097:android:ca54b8cabfe7e20e84f868",
+        "android_client_info": {
+          "package_name": "com.example.juciflut"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "614451079097-p2t4jkhli3q52h1178ei83n3h3ivrbng.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfFk34yr3nuCdRKRUAez7YGGOoKQbIPkQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "614451079097-p2t4jkhli3q52h1178ei83n3h3ivrbng.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    },
+    {
+      "client_info": {
+        "mobilesdk_app_id": "1:614451079097:android:d4580e455e2d5f7284f868",
+        "android_client_info": {
+          "package_name": "com.juci.andfacconsult"
+        }
+      },
+      "oauth_client": [
+        {
+          "client_id": "614451079097-ovk9r84l9p6il5oqluojl9r2aeinvkab.apps.googleusercontent.com",
+          "client_type": 1,
+          "android_info": {
+            "package_name": "com.juci.andfacconsult",
+            "certificate_hash": "22b76c2412d3d7aaf7891ba211e774dcd0272704"
+          }
+        },
+        {
+          "client_id": "614451079097-p2t4jkhli3q52h1178ei83n3h3ivrbng.apps.googleusercontent.com",
+          "client_type": 3
+        }
+      ],
+      "api_key": [
+        {
+          "current_key": "AIzaSyBfFk34yr3nuCdRKRUAez7YGGOoKQbIPkQ"
+        }
+      ],
+      "services": {
+        "appinvite_service": {
+          "other_platform_oauth_client": [
+            {
+              "client_id": "614451079097-p2t4jkhli3q52h1178ei83n3h3ivrbng.apps.googleusercontent.com",
+              "client_type": 3
+            }
+          ]
+        }
+      }
+    }
+  ],
+  "configuration_version": "1"
+}

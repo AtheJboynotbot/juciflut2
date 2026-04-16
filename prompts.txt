@@ -1,0 +1,250 @@
+1st and 2nd prompts are done 
+1.) I'm building a Flutter Web faculty consultation scheduling app called JuCi.
+
+    **Current Tech Stack:**
+    - Flutter 3.10.7 (Web platform)
+    - Firebase (Auth, Firestore, Storage)
+    - Provider for state management
+    - Material 3 with glassmorphism UI
+    - Firebase project: facconsult-19071
+    - Firestore database: facconsult-firebase
+
+    **Current Architecture:**
+    - [/lib/models/](cci:9://file:///c:/Users/User/Desktop/sC0l%20work/Flutter%20JuCi/juciflut/lib/models:0:0-0:0) - FacultyModel, ScheduleModel
+    - [/lib/services/](cci:9://file:///c:/Users/User/Desktop/sC0l%20work/Flutter%20JuCi/juciflut/lib/services:0:0-0:0) - AuthService, FirestoreService
+    - [/lib/providers/](cci:9://file:///c:/Users/User/Desktop/sC0l%20work/Flutter%20JuCi/juciflut/lib/providers:0:0-0:0) - FacultyProvider (ChangeNotifier)
+    - [/lib/views/pages/](cci:9://file:///c:/Users/User/Desktop/sC0l%20work/Flutter%20JuCi/juciflut/lib/views/pages:0:0-0:0) - DashboardPage, SchedulePage, ProfilePage
+    - [/lib/widgets/](cci:9://file:///c:/Users/User/Desktop/sC0l%20work/Flutter%20JuCi/juciflut/lib/widgets:0:0-0:0) - GlassmorphicCard
+
+    **Firestore Collections:**
+    1. `faculty` - stores faculty profiles (email, first_name, last_name, department_id, availability_status, profile_image_url, phone_number, office_location, date_of_birth)
+    2. `schedules` - stores consultation slots (faculty_id, day, time_start, time_end, type, title, location, createdAt)
+    3. `departments` - stores department reference data
+
+    **Key Conventions:**
+    - Snake_case for Firestore fields (faculty_id, time_start, etc.)
+    - CamelCase for Dart properties (facultyId, timeStart, etc.)
+    - Time format: "8:00 AM" (12-hour with AM/PM)
+    - All file paths must be absolute Windows paths starting with c:\Users\User\Desktop\sC0l work\Flutter JuCi\juciflut\
+
+    **Current Working Directory:**
+    c:\Users\User\Desktop\sC0l work\Flutter JuCi\juciflut\
+
+    **Design Theme:**
+    - Primary color: #7C4DFF (violet)
+    - Dark background: #1A1A2E
+    - Glassmorphic cards with backdrop blur
+    - Responsive (mobile <700px, tablet 700-900px, desktop >900px)
+
+    [INSERT SPECIFIC FEATURE REQUEST BELOW]
+
+2.) Using the context above, help me implement production-ready Firestore Security Rules.
+
+    **Requirements:**
+    1. Faculty can only read/write their own profile (match email with auth.token.email)
+    2. Faculty can only create/read/update/delete their own schedules (match faculty_id)
+    3. Anyone authenticated can read departments (read-only for all)
+    4. Validate required fields and data types
+    5. Prevent future expiration issues
+    6. Add isBooked field validation for schedules
+
+    **Deliverables:**
+    - Complete firestore.rules file
+    - Comments explaining each rule
+    - Testing commands to verify rules work
+
+3.) Using the context above, help me set up proper environment configuration.
+
+    **Requirements:**
+    1. Add flutter_dotenv package to pubspec.yaml
+    2. Create .env, .env.dev, .env.staging, .env.prod files
+    3. Store Firebase config, API keys securely
+    4. Update .gitignore to exclude .env files
+    5. Modify main.dart to load environment-specific config
+    6. Create example .env.example file for team reference
+
+    **Environment Variables Needed:**
+    - FIREBASE_API_KEY
+    - FIREBASE_PROJECT_ID
+    - FIREBASE_DATABASE_ID
+    - FIREBASE_STORAGE_BUCKET
+    - ENVIRONMENT (dev/staging/prod)
+
+    **Deliverables:**
+    - Updated pubspec.yaml
+    - .env.example template
+    - Modified firebase_options.dart to use .env
+    - Documentation on how to use in different environments
+
+4.) Using the context above, help me build a complete booking system.
+
+        **Requirements:**
+        1. Create new Firestore collection 'bookings' with schema:
+        - id, schedule_id, faculty_id, student_email, student_name, student_department
+        - status: 'pending' | 'approved' | 'rejected' | 'completed' | 'cancelled'
+        - reason (text), createdAt, updatedAt
+
+        2. Add 'isBooked' field to schedules collection (boolean)
+
+        3. Create BookingModel with toFirestore/fromFirestore methods
+
+        4. Add BookingService to services/ folder with methods:
+        - createBooking()
+        - approveBooking()
+        - rejectBooking()
+        - cancelBooking()
+        - streamBookingsForFaculty()
+
+        5. Create BookingsPage UI showing:
+        - Pending requests (approve/reject buttons)
+        - Upcoming bookings
+        - Past bookings
+        - Filter by status
+
+        6. Add booking request dialog/form for students (or faculty can book on behalf)
+
+        7. Update SchedulePage to show which slots are booked
+
+        **Deliverables:**
+        - models/booking_model.dart
+        - services/booking_service.dart
+        - views/pages/bookings_page.dart
+        - Updated schedule_page.dart with booking indicators
+        - Updated firestore_service.dart if needed
+        - Updated navigation in dashboard_shell.dart
+
+5.) Using the context above, help me create a testing infrastructure.
+
+    **Requirements:**
+    1. Unit tests for:
+    - FacultyModel.toFirestore() and fromFirestore()
+    - ScheduleModel serialization
+    - FirestoreService methods (mocked)
+    
+    2. Widget tests for:
+    - GlassmorphicCard
+    - Navigation items
+    - Form validation
+
+    3. Integration tests for:
+    - Login flow
+    - Creating a schedule
+    - Updating profile
+
+    **Setup needed:**
+    - mockito for mocking Firebase
+    - fake_cloud_firestore for Firestore testing
+    - flutter_test framework
+
+    **Deliverables:**
+    - test/models/faculty_model_test.dart
+    - test/models/schedule_model_test.dart
+    - test/services/firestore_service_test.dart
+    - test/widgets/glassmorphic_card_test.dart
+    - test/integration/login_flow_test.dart
+    - Updated pubspec.yaml with test dependencies
+    - README section on running tests
+
+6.) Using the context above, help me add schedule conflict detection.
+
+        **Requirements:**
+        1. Before saving a schedule, check if faculty already has a slot at that time
+        2. Check for overlapping time ranges (e.g., 9:00 AM - 11:00 AM conflicts with 10:00 AM - 12:00 PM)
+        3. Show clear error message with conflicting schedule details
+        4. Add validateSchedule() method to FirestoreService
+        5. Highlight conflicts in the UI before submission
+
+        **Business Rules:**
+        - Same day, overlapping times = conflict
+        - Allow different days with same time
+        - Allow back-to-back slots (9-10 AM, then 10-11 AM)
+
+        **Deliverables:**
+        - Updated firestore_service.dart with validation logic
+        - Error handling in schedule_page.dart
+        - Visual indicators in schedule list
+        - Helper function to parse "8:00 AM" format for comparison
+
+7.) Using the context above, create professional loading and empty states.
+
+    **Requirements:**
+    1. Create reusable widgets:
+    - SkeletonCard (shimmer effect)
+    - EmptyStateWidget (icon, title, subtitle, optional action button)
+    - LoadingOverlay
+
+    2. Add illustrations or icons for:
+    - No schedules yet
+    - No bookings yet
+    - No search results
+    - Network error
+
+    3. Replace all CircularProgressIndicator with contextual loaders
+
+    4. Add shimmer package for skeleton loaders
+
+    **Locations to update:**
+    - DashboardPage stats loading
+    - SchedulePage list loading
+    - ProfilePage image upload
+    - Login screen
+
+    **Deliverables:**
+    - widgets/skeleton_card.dart
+    - widgets/empty_state.dart
+    - widgets/loading_overlay.dart
+    - Updated all page files with proper states
+    - Add shimmer dependency to pubspec.yaml
+
+8.) Using the context above, implement comprehensive validation.
+
+    **Requirements:**
+    1. Create ValidationHelper class with methods:
+    - validateEmail()
+    - validateTime()
+    - validateRequired()
+    - validatePhoneNumber()
+
+    2. Add proper form validation to:
+    - Schedule creation form (all fields required)
+    - Profile update form (email format, phone format)
+    - Time picker validation (start < end)
+
+    3. Create custom error dialog widget with:
+    - Error icon
+    - User-friendly message
+    - Retry action button
+
+    4. Replace all print() statements with logger package
+
+    5. Add global error boundary
+
+    **Deliverables:**
+    - utils/validation_helper.dart
+    - utils/logger.dart
+    - widgets/error_dialog.dart
+    - Updated all forms with validation
+    - Updated pubspec.yaml with logger package
+
+9.) Using the context above, integrate Firebase Analytics and Crashlytics.
+
+    **Requirements:**
+    1. Add firebase_analytics and firebase_crashlytics packages
+    2. Initialize in main.dart
+    3. Track key events:
+    - login_success
+    - schedule_created
+    - schedule_deleted
+    - profile_updated
+    - booking_requested
+
+    4. Log custom events with parameters
+    5. Add user properties (department, role)
+    6. Test crashes in dev mode
+
+    **Deliverables:**
+    - services/analytics_service.dart
+    - Updated main.dart with initialization
+    - Event tracking in all key user actions
+    - Crashlytics error reporting wrapper
+    - Updated pubspec.yaml
