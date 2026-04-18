@@ -317,7 +317,7 @@ class FirestoreService {
     final affected = <Map<String, dynamic>>[];
     for (final doc in snap.docs) {
       await doc.reference.update({
-        'status': 'cancelled_by_faculty',
+        'status': 'schedule_cancelled',
         'cancellation_reason': cancellationReason,
         'cancelledAt': FieldValue.serverTimestamp(),
       });

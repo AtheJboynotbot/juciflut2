@@ -24,17 +24,18 @@ service cloud.firestore {
     
     // Validate faculty profile data
     function isValidFacultyData(data) {
-      return data.keys().hasAll(['email', 'first_name', 'last_name']) &&
-             data.email is string && data.email.size() > 0 &&
-             data.first_name is string && data.first_name.size() > 0 &&
-             data.last_name is string && data.last_name.size() > 0 &&
+      return data.email is string && data.email.size() > 0 &&
+             // Name fields are optional but must be strings when present
+             (!('first_name' in data) || data.first_name is string) &&
+             (!('last_name' in data) || data.last_name is string) &&
              // Optional fields validation
              (!('department_id' in data) || data.department_id is string) &&
              (!('availability_status' in data) || data.availability_status in ['available', 'busy', 'away']) &&
              (!('profile_image_url' in data) || data.profile_image_url is string) &&
              (!('phone_number' in data) || data.phone_number is string) &&
              (!('office_location' in data) || data.office_location is string) &&
-             (!('date_of_birth' in data) || data.date_of_birth is string);
+             // date_of_birth can be null, a Timestamp, or absent — never a plain string
+             (!('date_of_birth' in data) || data.date_of_birth == null || data.date_of_birth is timestamp);
     }
     
     // Validate schedule data
@@ -58,20 +59,21 @@ service cloud.firestore {
     // =========================================================================
     
     match /faculty/{facultyId} {
-      // Allow read if user is authenticated AND the document email matches their auth email
-      allow read: if isAuthenticated() && 
-                     resource.data.email == getUserEmail();
+      // Any authenticated user can read faculty documents (students need this for the directory)
+      allow read: if isAuthenticated();
       
-      // Allow create if user is authenticated AND they're creating their own profile
-      allow create: if isAuthenticated() && 
-                       request.resource.data.email == getUserEmail() &&
-                       isValidFacultyData(request.resource.data);
+      // Faculty documents are pre-created by admin only — no self-registration
+      allow create: if false;
       
-      // Allow update if user owns the document AND validation passes
-      // User can only update their own profile, cannot change email
-      allow update: if isFacultyOwner(resource.data) && 
+      // Allow update if user owns the document and email is unchanged.
+      // isValidFacultyData is applied only to the fields actually being written
+      // (affectedKeys) so partial updates like status toggles are not blocked
+      // by unrelated fields already stored in the document.
+      allow update: if isFacultyOwner(resource.data) &&
                        request.resource.data.email == resource.data.email &&
-                       isValidFacultyData(request.resource.data);
+                       isValidFacultyData(request.resource.data.diff(resource.data).changedKeys().hasAny(['email','first_name','last_name','department_id','availability_status','profile_image_url','phone_number','office_location','date_of_birth'])
+                         ? request.resource.data
+                         : {'email': resource.data.email});
       
       // Allow delete if user owns the document
       allow delete: if isFacultyOwner(resource.data);
@@ -119,6 +121,66 @@ service cloud.firestore {
       allow write: if false;
     }
     
+    // =========================================================================
+    // BOOKINGS COLLECTION RULES
+    // =========================================================================
+
+    match /bookings/{bookingId} {
+      // Faculty who owns this booking (faculty_id → faculty doc → email match)
+      function isFacultyBooking() {
+        return isAuthenticated() &&
+               exists(/databases/$(database)/documents/faculty/$(resource.data.faculty_id)) &&
+               get(/databases/$(database)/documents/faculty/$(resource.data.faculty_id)).data.email == getUserEmail();
+      }
+
+      // Student who owns this booking
+      function isStudentBooking() {
+        return isAuthenticated() && resource.data.student_email == getUserEmail();
+      }
+
+      // Faculty reads all their bookings; students read their own
+      allow read: if isFacultyBooking() || isStudentBooking();
+
+      // Students create bookings for themselves (pending only)
+      allow create: if isAuthenticated() &&
+                       request.resource.data.student_email == getUserEmail() &&
+                       request.resource.data.status == 'pending' &&
+                       request.resource.data.keys().hasAll(['schedule_id', 'faculty_id', 'student_email', 'student_name', 'status', 'reason']) &&
+                       // student_id, if provided, must match the caller's Firebase Auth UID
+                       (!('student_id' in request.resource.data) || request.resource.data.student_id == request.auth.uid);
+
+      // Faculty update status (approve / reject / cancel / complete)
+      // faculty_id and student_email are immutable
+      allow update: if isFacultyBooking() &&
+                       request.resource.data.faculty_id == resource.data.faculty_id &&
+                       request.resource.data.student_email == resource.data.student_email;
+
+      // Faculty can delete; students can delete their own bookings
+      allow delete: if isFacultyBooking() || isStudentBooking();
+    }
+
+    // =========================================================================
+    // NOTIFICATIONS COLLECTION RULES
+    // =========================================================================
+
+    match /notifications/{notificationId} {
+      // Authenticated faculty/system can queue notification records
+      allow create: if isAuthenticated();
+
+      // Students read their own notifications — matched by email OR Firebase Auth UID
+      allow read: if isAuthenticated() &&
+                     (resource.data.student_email == getUserEmail() ||
+                      resource.data.student_id == request.auth.uid);
+
+      // Students can mark their own notifications as read (status update)
+      allow update: if isAuthenticated() &&
+                       resource.data.student_email == getUserEmail() &&
+                       request.resource.data.student_email == resource.data.student_email;
+
+      // No client-side deletes
+      allow delete: if false;
+    }
+
     // =========================================================================
     // CATCH-ALL RULE - Deny everything else
     // =========================================================================

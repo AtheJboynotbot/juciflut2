@@ -4,9 +4,11 @@ import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:firebase_auth/firebase_auth.dart';
 import 'package:cached_network_image/cached_network_image.dart';
+import '../providers/booking_provider.dart';
 import '../providers/faculty_provider.dart';
 import '../services/auth_service.dart';
 import '../widgets/glassmorphic_card.dart';
+import 'pages/bookings_page.dart';
 import 'pages/dashboard_page.dart';
 import 'pages/schedule_page.dart';
 import 'pages/profile_page.dart';
@@ -31,17 +33,44 @@ class DashboardShell extends StatefulWidget {
 
 class _DashboardShellState extends State<DashboardShell> {
   final AuthService _authService = AuthService();
+  bool _bookingProviderInitialized = false;
+  FacultyProvider? _facProv;
+  VoidCallback? _onFacultyReady;
 
   @override
   void initState() {
     super.initState();
-    // Initialize provider with current user's data streams
     final user = FirebaseAuth.instance.currentUser;
-    if (user != null) {
+    if (user == null) {
       WidgetsBinding.instance.addPostFrameCallback((_) {
-        context.read<FacultyProvider>().initForUser(user);
+        if (mounted) Navigator.of(context).pushReplacementNamed('/login');
       });
+      return;
     }
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      _facProv = context.read<FacultyProvider>();
+      _facProv!.initForUser(user);
+      _onFacultyReady = () {
+        if (!mounted) return;
+        final fac = _facProv!.faculty;
+        if (fac != null && !_bookingProviderInitialized) {
+          _bookingProviderInitialized = true;
+          context.read<BookingProvider>().initForFaculty(fac.id);
+          _facProv!.removeListener(_onFacultyReady!);
+          _onFacultyReady = null;
+        }
+      };
+      _facProv!.addListener(_onFacultyReady!);
+    });
+  }
+
+  @override
+  void dispose() {
+    if (_onFacultyReady != null) {
+      _facProv?.removeListener(_onFacultyReady!);
+    }
+    super.dispose();
   }
 
   @override
@@ -307,8 +336,8 @@ class _DashboardShellState extends State<DashboardShell> {
   //  Sidebar – glassmorphic card with nav items
   // -------------------------------------------------------------------------
   Widget _buildSidebar() {
-    return Consumer<FacultyProvider>(
-      builder: (context, prov, _) {
+    return Consumer2<FacultyProvider, BookingProvider>(
+      builder: (context, prov, bookProv, _) {
         return GlassmorphicCard(
           padding: const EdgeInsets.all(12),
           child: Column(
@@ -318,7 +347,9 @@ class _DashboardShellState extends State<DashboardShell> {
               const SizedBox(height: 8),
               _buildNavItem(icon: Icons.calendar_month_outlined, label: 'My Schedule', index: 1, selected: prov.selectedNavIndex == 1),
               const SizedBox(height: 8),
-              _buildNavItem(icon: Icons.person_outline, label: 'Manage Profile', index: 2, selected: prov.selectedNavIndex == 2),
+              _buildNavItem(icon: Icons.book_online_outlined, label: 'Bookings', index: 2, selected: prov.selectedNavIndex == 2, badgeCount: bookProv.pendingCount),
+              const SizedBox(height: 8),
+              _buildNavItem(icon: Icons.person_outline, label: 'Manage Profile', index: 3, selected: prov.selectedNavIndex == 3),
             ],
           ),
         );
@@ -331,6 +362,7 @@ class _DashboardShellState extends State<DashboardShell> {
     required String label,
     required int index,
     required bool selected,
+    int badgeCount = 0,
   }) {
     return Material(
       color: Colors.transparent,
@@ -356,10 +388,38 @@ class _DashboardShellState extends State<DashboardShell> {
           child: Row(
             mainAxisSize: MainAxisSize.min,
             children: [
-              Icon(
-                icon,
-                size: 20,
-                color: selected ? Colors.white : kCardText.withValues(alpha: 0.7),
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    icon,
+                    size: 20,
+                    color: selected ? Colors.white : kCardText.withValues(alpha: 0.7),
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -5,
+                      top: -5,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                            minWidth: 15, minHeight: 15),
+                        child: Text(
+                          '$badgeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 8,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(width: 12),
               Flexible(
@@ -393,6 +453,8 @@ class _DashboardShellState extends State<DashboardShell> {
           case 1:
             return const SchedulePage();
           case 2:
+            return const BookingsPage();
+          case 3:
             return const ProfilePage();
           default:
             return const DashboardPage();
@@ -405,8 +467,8 @@ class _DashboardShellState extends State<DashboardShell> {
   //  Bottom Navigation (Mobile only)
   // -------------------------------------------------------------------------
   Widget _buildBottomNav() {
-    return Consumer<FacultyProvider>(
-      builder: (context, prov, _) {
+    return Consumer2<FacultyProvider, BookingProvider>(
+      builder: (context, prov, bookProv, _) {
         return Container(
           decoration: BoxDecoration(
             color: Colors.white,
@@ -440,11 +502,19 @@ class _DashboardShellState extends State<DashboardShell> {
                     isSelected: prov.selectedNavIndex == 1,
                   ),
                   _buildBottomNavItem(
+                    icon: Icons.book_online_outlined,
+                    activeIcon: Icons.book_online,
+                    label: 'Bookings',
+                    index: 2,
+                    isSelected: prov.selectedNavIndex == 2,
+                    badgeCount: bookProv.pendingCount,
+                  ),
+                  _buildBottomNavItem(
                     icon: Icons.person_outline,
                     activeIcon: Icons.person,
                     label: 'Profile',
-                    index: 2,
-                    isSelected: prov.selectedNavIndex == 2,
+                    index: 3,
+                    isSelected: prov.selectedNavIndex == 3,
                   ),
                 ],
               ),
@@ -461,6 +531,7 @@ class _DashboardShellState extends State<DashboardShell> {
     required String label,
     required int index,
     required bool isSelected,
+    int badgeCount = 0,
   }) {
     return Expanded(
       child: Material(
@@ -470,10 +541,38 @@ class _DashboardShellState extends State<DashboardShell> {
           child: Column(
             mainAxisAlignment: MainAxisAlignment.center,
             children: [
-              Icon(
-                isSelected ? activeIcon : icon,
-                size: 26,
-                color: isSelected ? kVioletAccent : Colors.grey.shade600,
+              Stack(
+                clipBehavior: Clip.none,
+                children: [
+                  Icon(
+                    isSelected ? activeIcon : icon,
+                    size: 26,
+                    color: isSelected ? kVioletAccent : Colors.grey.shade600,
+                  ),
+                  if (badgeCount > 0)
+                    Positioned(
+                      right: -6,
+                      top: -4,
+                      child: Container(
+                        padding: const EdgeInsets.all(3),
+                        decoration: const BoxDecoration(
+                          color: Colors.red,
+                          shape: BoxShape.circle,
+                        ),
+                        constraints: const BoxConstraints(
+                            minWidth: 16, minHeight: 16),
+                        child: Text(
+                          '$badgeCount',
+                          style: const TextStyle(
+                            color: Colors.white,
+                            fontSize: 9,
+                            fontWeight: FontWeight.bold,
+                          ),
+                          textAlign: TextAlign.center,
+                        ),
+                      ),
+                    ),
+                ],
               ),
               const SizedBox(height: 4),
               Text(
@@ -522,6 +621,7 @@ class _DashboardShellState extends State<DashboardShell> {
             // Reset provider to clear all data
             final provider = Provider.of<FacultyProvider>(context, listen: false);
             provider.reset();
+            Provider.of<BookingProvider>(context, listen: false).reset();
             
             // Sign out from Firebase
             await _authService.signOut();

@@ -1,1 +1,30 @@
-{"flutter":{"platforms":{"android":{"default":{"projectId":"facconsult-19071","appId":"1:614451079097:android:ca54b8cabfe7e20e84f868","fileOutput":"android/app/google-services.json"}},"dart":{"lib/firebase_options.dart":{"projectId":"facconsult-19071","configurations":{"android":"1:614451079097:android:ca54b8cabfe7e20e84f868","ios":"1:614451079097:ios:9d31ebf9ab7e3cdb84f868","macos":"1:614451079097:ios:9d31ebf9ab7e3cdb84f868","web":"1:614451079097:web:866b893632913ce784f868","windows":"1:614451079097:web:4d22db07fa636a5c84f868"}}}}}}
+{
+  "firestore": {
+    "database": "facconsult-firebase",
+    "rules": "firestore.rules",
+    "indexes": "firestore.indexes.json"
+  },
+  "flutter": {
+    "platforms": {
+      "android": {
+        "default": {
+          "projectId": "facconsult-19071",
+          "appId": "1:614451079097:android:ca54b8cabfe7e20e84f868",
+          "fileOutput": "android/app/google-services.json"
+        }
+      },
+      "dart": {
+        "lib/firebase_options.dart": {
+          "projectId": "facconsult-19071",
+          "configurations": {
+            "android": "1:614451079097:android:ca54b8cabfe7e20e84f868",
+            "ios": "1:614451079097:ios:9d31ebf9ab7e3cdb84f868",
+            "macos": "1:614451079097:ios:9d31ebf9ab7e3cdb84f868",
+            "web": "1:614451079097:web:866b893632913ce784f868",
+            "windows": "1:614451079097:web:4d22db07fa636a5c84f868"
+          }
+        }
+      }
+    }
+  }
+}

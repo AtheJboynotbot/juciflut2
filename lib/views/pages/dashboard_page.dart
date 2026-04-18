@@ -1,6 +1,8 @@
 import 'package:flutter/material.dart';
 import 'package:provider/provider.dart';
 import 'package:intl/intl.dart';
+import '../../models/booking_model.dart';
+import '../../providers/booking_provider.dart';
 import '../../providers/faculty_provider.dart';
 import '../../models/schedule_model.dart';
 import '../../widgets/glassmorphic_card.dart';
@@ -39,6 +41,8 @@ class DashboardPage extends StatelessWidget {
                         'This Week', '${prov.weeklyConsultations}\nConsultations'),
                     const SizedBox(height: 16),
                     _buildTodayScheduleCard(context, prov),
+                    const SizedBox(height: 16),
+                    _buildPendingBookingsCard(context),
                   ],
                 ),
               );
@@ -46,29 +50,35 @@ class DashboardPage extends StatelessWidget {
             
             // Tablet/Desktop: Side by side
             return SingleChildScrollView(
-              child: Row(
-                crossAxisAlignment: CrossAxisAlignment.start,
+              child: Column(
                 children: [
-                  // Left column: Status + Stats
-                  Expanded(
-                    flex: 5,
-                    child: Column(
-                      children: [
-                        _buildStatusCard(context, prov),
-                        const SizedBox(height: 12),
-                        _buildStatCard('Today\'s Slots', '${prov.totalSlots}'),
-                        const SizedBox(height: 12),
-                        _buildStatCard(
-                            'This Week', '${prov.weeklyConsultations}\nConsultations'),
-                      ],
-                    ),
+                  Row(
+                    crossAxisAlignment: CrossAxisAlignment.start,
+                    children: [
+                      // Left column: Status + Stats
+                      Expanded(
+                        flex: 5,
+                        child: Column(
+                          children: [
+                            _buildStatusCard(context, prov),
+                            const SizedBox(height: 12),
+                            _buildStatCard('Today\'s Slots', '${prov.totalSlots}'),
+                            const SizedBox(height: 12),
+                            _buildStatCard(
+                                'This Week', '${prov.weeklyConsultations}\nConsultations'),
+                          ],
+                        ),
+                      ),
+                      const SizedBox(width: 16),
+                      // Right column: Today's Schedule
+                      Expanded(
+                        flex: 6,
+                        child: _buildTodayScheduleCard(context, prov),
+                      ),
+                    ],
                   ),
-                  const SizedBox(width: 16),
-                  // Right column: Today's Schedule
-                  Expanded(
-                    flex: 6,
-                    child: _buildTodayScheduleCard(context, prov),
-                  ),
+                  const SizedBox(height: 16),
+                  _buildPendingBookingsCard(context),
                 ],
               ),
             );
@@ -727,4 +737,223 @@ class DashboardPage extends StatelessWidget {
     'Saturday',
     'Sunday',
   ];
+
+  // -------------------------------------------------------------------------
+  //  Pending Bookings Card
+  // -------------------------------------------------------------------------
+  Widget _buildPendingBookingsCard(BuildContext context) {
+    return Consumer<BookingProvider>(
+      builder: (context, bookProv, _) {
+        final pending = bookProv.pendingBookings.take(3).toList();
+
+        return GlassmorphicCard(
+          child: Column(
+            crossAxisAlignment: CrossAxisAlignment.start,
+            children: [
+              // Header row
+              Row(
+                children: [
+                  const Text(
+                    'Pending Bookings',
+                    style: TextStyle(
+                      fontSize: 16,
+                      fontWeight: FontWeight.w700,
+                      color: kCardText,
+                    ),
+                  ),
+                  if (bookProv.pendingCount > 0) ...[
+                    const SizedBox(width: 8),
+                    Container(
+                      padding: const EdgeInsets.symmetric(
+                          horizontal: 8, vertical: 3),
+                      decoration: BoxDecoration(
+                        color: Colors.orange.shade400,
+                        borderRadius: BorderRadius.circular(12),
+                      ),
+                      child: Text(
+                        '${bookProv.pendingCount}',
+                        style: const TextStyle(
+                          color: Colors.white,
+                          fontSize: 12,
+                          fontWeight: FontWeight.bold,
+                        ),
+                      ),
+                    ),
+                  ],
+                  const Spacer(),
+                  TextButton(
+                    onPressed: () =>
+                        context.read<FacultyProvider>().setNavIndex(2),
+                    child: const Text(
+                      'View All',
+                      style: TextStyle(
+                          color: kVioletAccent,
+                          fontWeight: FontWeight.w600),
+                    ),
+                  ),
+                ],
+              ),
+              const SizedBox(height: 12),
+
+              if (pending.isEmpty)
+                // Empty state
+                Row(children: [
+                  Icon(Icons.check_circle_outline,
+                      color: Colors.green.shade500, size: 20),
+                  const SizedBox(width: 8),
+                  Text(
+                    'No pending requests',
+                    style: TextStyle(
+                        color: Colors.green.shade700,
+                        fontWeight: FontWeight.w500),
+                  ),
+                ])
+              else
+                ...pending.map(
+                    (b) => _buildPendingTile(context, b)),
+            ],
+          ),
+        );
+      },
+    );
+  }
+
+  Widget _buildPendingTile(
+      BuildContext context, BookingModel booking) {
+    final initial = booking.studentName.isNotEmpty
+        ? booking.studentName[0].toUpperCase()
+        : '?';
+
+    return Container(
+      margin: const EdgeInsets.only(bottom: 8),
+      padding: const EdgeInsets.all(12),
+      decoration: BoxDecoration(
+        color: Colors.orange.withValues(alpha: 0.07),
+        borderRadius: BorderRadius.circular(10),
+        border:
+            Border.all(color: Colors.orange.shade200),
+      ),
+      child: Row(
+        crossAxisAlignment: CrossAxisAlignment.start,
+        children: [
+          // Avatar
+          CircleAvatar(
+            radius: 18,
+            backgroundColor: Colors.orange.shade400,
+            child: Text(
+              initial,
+              style: const TextStyle(
+                color: Colors.white,
+                fontWeight: FontWeight.bold,
+                fontSize: 14,
+              ),
+            ),
+          ),
+          const SizedBox(width: 10),
+          // Info
+          Expanded(
+            child: Column(
+              crossAxisAlignment:
+                  CrossAxisAlignment.start,
+              children: [
+                Text(
+                  booking.studentName,
+                  style: const TextStyle(
+                    fontWeight: FontWeight.bold,
+                    fontSize: 13,
+                    color: kCardText,
+                  ),
+                ),
+                Text(
+                  booking.studentEmail,
+                  style: TextStyle(
+                    fontSize: 11,
+                    color: Colors.grey.shade600,
+                  ),
+                ),
+                if (booking.studentDepartment
+                    .isNotEmpty)
+                  Text(
+                    booking.studentDepartment,
+                    style: TextStyle(
+                      fontSize: 11,
+                      color: Colors.grey.shade500,
+                    ),
+                  ),
+                if (booking.reason.isNotEmpty)
+                  Text(
+                    booking.reason,
+                    style: const TextStyle(
+                      fontSize: 11,
+                      fontStyle: FontStyle.italic,
+                      color: kCardText,
+                    ),
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                  ),
+              ],
+            ),
+          ),
+          // Action buttons
+          Column(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              IconButton(
+                icon: const Icon(
+                    Icons.check_circle_outline,
+                    size: 20),
+                color: Colors.green.shade600,
+                tooltip: 'Approve',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () =>
+                    _quickApprove(context, booking),
+              ),
+              const SizedBox(height: 4),
+              IconButton(
+                icon: const Icon(Icons.info_outline,
+                    size: 20),
+                color: kVioletAccent,
+                tooltip: 'View in Bookings',
+                padding: EdgeInsets.zero,
+                constraints: const BoxConstraints(),
+                onPressed: () => context
+                    .read<FacultyProvider>()
+                    .setNavIndex(2),
+              ),
+            ],
+          ),
+        ],
+      ),
+    );
+  }
+
+  Future<void> _quickApprove(
+      BuildContext context, BookingModel booking) async {
+    try {
+      await context
+          .read<BookingProvider>()
+          .approveBooking(booking.id);
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text(
+                'Approved booking for ${booking.studentName}'),
+            backgroundColor: Colors.green,
+            duration: const Duration(seconds: 2),
+          ),
+        );
+      }
+    } catch (e) {
+      if (context.mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Failed to approve: $e'),
+            backgroundColor: Colors.red,
+            duration: const Duration(seconds: 3),
+          ),
+        );
+      }
+    }
+  }
 }

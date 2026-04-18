@@ -113,6 +113,7 @@ class ScheduleModel {
       'title': title,
       'location': location,
       'is_booked': isBooked,
+      'isBooked': isBooked,
       'max_bookings': maxBookings,
       'current_bookings': currentBookings,
       'createdAt': createdAt != null

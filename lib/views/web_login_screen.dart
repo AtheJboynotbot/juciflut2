@@ -32,11 +32,8 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   final _formKey = GlobalKey<FormState>();
   final _emailController = TextEditingController();
   final _passwordController = TextEditingController();
-  final _confirmPasswordController = TextEditingController();
-  final _nameController = TextEditingController();
   bool _isLoading = false;
   bool _obscurePassword = true;
-  bool _isSignUp = false;
   String? _errorMessage;
 
   // ---- Firebase instances (lazy – avoids crash before Firebase.initializeApp) --
@@ -47,11 +44,20 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       );
 
   @override
+  void initState() {
+    super.initState();
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      if (!mounted) return;
+      if (FirebaseAuth.instance.currentUser != null) {
+        Navigator.of(context).pushReplacementNamed('/dashboard');
+      }
+    });
+  }
+
+  @override
   void dispose() {
     _emailController.dispose();
     _passwordController.dispose();
-    _confirmPasswordController.dispose();
-    _nameController.dispose();
     super.dispose();
   }
 
@@ -73,41 +79,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       );
 
       if (credential.user != null) {
-        _handlePostLogin(credential.user!);
-      }
-    } on FirebaseAuthException catch (e) {
-      setState(() => _errorMessage = _mapFirebaseAuthError(e.code));
-    } catch (e) {
-      setState(() => _errorMessage = 'An unexpected error occurred.');
-    } finally {
-      if (mounted) setState(() => _isLoading = false);
-    }
-  }
-
-  // =========================================================================
-  //  FIREBASE AUTH – Create Account
-  // =========================================================================
-  Future<void> _createAccount() async {
-    if (!_formKey.currentState!.validate()) return;
-
-    setState(() {
-      _isLoading = true;
-      _errorMessage = null;
-    });
-
-    try {
-      final credential = await _auth.createUserWithEmailAndPassword(
-        email: _emailController.text.trim(),
-        password: _passwordController.text,
-      );
-
-      if (credential.user != null) {
-        // Update display name if provided
-        final name = _nameController.text.trim();
-        if (name.isNotEmpty) {
-          await credential.user!.updateDisplayName(name);
-        }
-        _handlePostLogin(credential.user!);
+        await _handlePostLogin(credential.user!);
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _errorMessage = _mapFirebaseAuthError(e.code));
@@ -135,7 +107,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       final userCredential = await _auth.signInWithPopup(googleProvider);
 
       if (userCredential.user != null) {
-        _handlePostLogin(userCredential.user!);
+        await _handlePostLogin(userCredential.user!);
       }
     } on FirebaseAuthException catch (e) {
       setState(() => _errorMessage = _mapFirebaseAuthError(e.code));
@@ -148,21 +120,10 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
   }
 
   // =========================================================================
-  //  FIRESTORE RBAC – Check / create user document with role
+  //  FIRESTORE RBAC – Faculty-only access gate
   // =========================================================================
   Future<void> _handlePostLogin(User user) async {
-    // Navigate immediately — don't wait for Firestore
-    if (mounted) {
-      Navigator.of(context).pushReplacementNamed('/dashboard');
-    }
-
-    // Fire-and-forget: ensure a faculty doc exists for this email
-    _ensureFacultyDoc(user);
-  }
-
-  /// Background task — creates a faculty doc if one doesn't exist yet.
-  Future<void> _ensureFacultyDoc(User user) async {
-    print('🔵 [ensureFacultyDoc] Checking for: ${user.email}');
+    print('🔵 [handlePostLogin] Verifying faculty access for: ${user.email}');
     try {
       final query = await _firestore
           .collection('faculty')
@@ -171,26 +132,30 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
           .get();
 
       if (query.docs.isEmpty) {
-        print('⚠️ [ensureFacultyDoc] No faculty doc found, creating one...');
-        final nameParts = (user.displayName ?? '').split(' ');
-        final docRef = await _firestore.collection('faculty').add({
-          'email': user.email ?? '',
-          'first_name': nameParts.isNotEmpty ? nameParts.first : '',
-          'last_name': nameParts.length > 1 ? nameParts.sublist(1).join(' ') : '',
-          'department_id': '',
-          'availability_status': 'away',
-          'profile_image_url': user.photoURL ?? '',
-          'phone_number': '',
-          'office_location': '',
-          'date_of_birth': null,
-        });
-        print('✅ [ensureFacultyDoc] Created faculty doc: ${docRef.id}');
-      } else {
-        print('✅ [ensureFacultyDoc] Faculty doc exists: ${query.docs.first.id}');
+        print('🚫 [handlePostLogin] Access denied – no faculty doc for: ${user.email}');
+        await _auth.signOut();
+        if (mounted) {
+          setState(() {
+            _errorMessage =
+                'Access denied. This portal is for faculty members only.\n'
+                'Contact your department admin if you believe this is an error.';
+          });
+        }
+        return;
+      }
+
+      print('✅ [handlePostLogin] Faculty verified: ${query.docs.first.id}');
+      if (mounted) {
+        Navigator.of(context).pushReplacementNamed('/dashboard');
       }
     } catch (e) {
-      print('❌ [ensureFacultyDoc] ERROR: $e');
-      debugPrint('Firestore post-login error: $e');
+      print('❌ [handlePostLogin] Error during faculty check: $e');
+      await _auth.signOut();
+      if (mounted) {
+        setState(() {
+          _errorMessage = 'Unable to verify account access. Please try again.';
+        });
+      }
     }
   }
 
@@ -308,8 +273,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
                   _buildLoginForm(),
                   const SizedBox(height: 24),
                   _buildLoginButton(),
-                  const SizedBox(height: 12),
-                  _buildAuthToggle(),
                   const SizedBox(height: 16),
                   _buildDivider(),
                   const SizedBox(height: 16),
@@ -371,42 +334,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
       key: _formKey,
       child: Column(
         children: [
-          // Display name field (sign-up only)
-          if (_isSignUp) ...[
-            TextFormField(
-              controller: _nameController,
-              textInputAction: TextInputAction.next,
-              decoration: InputDecoration(
-                labelText: 'Full Name',
-                hintText: 'Juan Dela Cruz',
-                prefixIcon:
-                    const Icon(Icons.person_outline, color: _kVioletAccent),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      const BorderSide(color: _kVioletAccent, width: 2),
-                ),
-              ),
-              validator: (value) {
-                if (_isSignUp && (value == null || value.trim().isEmpty)) {
-                  return 'Please enter your name.';
-                }
-                return null;
-              },
-            ),
-            const SizedBox(height: 16),
-          ],
           // Email field
           TextFormField(
             controller: _emailController,
@@ -450,7 +377,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
             controller: _passwordController,
             obscureText: _obscurePassword,
             textInputAction: TextInputAction.done,
-            onFieldSubmitted: (_) => _isSignUp ? _createAccount() : _signInWithEmail(),
+            onFieldSubmitted: (_) => _signInWithEmail(),
             decoration: InputDecoration(
               labelText: 'Password',
               hintText: '••••••••',
@@ -494,49 +421,6 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
               return null;
             },
           ),
-          // Confirm password field (sign-up only)
-          if (_isSignUp) ...[
-            const SizedBox(height: 16),
-            TextFormField(
-              controller: _confirmPasswordController,
-              obscureText: true,
-              textInputAction: TextInputAction.done,
-              onFieldSubmitted: (_) => _createAccount(),
-              decoration: InputDecoration(
-                labelText: 'Confirm Password',
-                hintText: '••••••••',
-                prefixIcon:
-                    const Icon(Icons.lock_outline, color: _kVioletAccent),
-                filled: true,
-                fillColor: Colors.grey.shade100,
-                border: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide: BorderSide.none,
-                ),
-                enabledBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      BorderSide(color: Colors.grey.shade300, width: 1),
-                ),
-                focusedBorder: OutlineInputBorder(
-                  borderRadius: BorderRadius.circular(14),
-                  borderSide:
-                      const BorderSide(color: _kVioletAccent, width: 2),
-                ),
-              ),
-              validator: (value) {
-                if (_isSignUp) {
-                  if (value == null || value.isEmpty) {
-                    return 'Please confirm your password.';
-                  }
-                  if (value != _passwordController.text) {
-                    return 'Passwords do not match.';
-                  }
-                }
-                return null;
-              },
-            ),
-          ],
         ],
       ),
     );
@@ -564,9 +448,7 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
           ],
         ),
         child: ElevatedButton(
-          onPressed: _isLoading
-              ? null
-              : (_isSignUp ? _createAccount : _signInWithEmail),
+          onPressed: _isLoading ? null : _signInWithEmail,
           style: ElevatedButton.styleFrom(
             backgroundColor: Colors.transparent,
             shadowColor: Colors.transparent,
@@ -584,45 +466,13 @@ class _WebLoginScreenState extends State<WebLoginScreen> {
                     color: Colors.white,
                   ),
                 )
-              : Text(
-                  _isSignUp ? 'Create Account' : 'Login',
-                  style: const TextStyle(
+              : const Text(
+                  'Login',
+                  style: TextStyle(
                       fontSize: 16, fontWeight: FontWeight.w600),
                 ),
         ),
       ),
-    );
-  }
-
-  // -------------------------------------------------------------------------
-  //  Toggle between Login and Sign Up
-  // -------------------------------------------------------------------------
-  Widget _buildAuthToggle() {
-    return Row(
-      mainAxisAlignment: MainAxisAlignment.center,
-      children: [
-        Text(
-          _isSignUp ? 'Already have an account?' : "Don't have an account?",
-          style: const TextStyle(color: _kSubtleGrey, fontSize: 13),
-        ),
-        TextButton(
-          onPressed: () {
-            setState(() {
-              _isSignUp = !_isSignUp;
-              _errorMessage = null;
-              _formKey.currentState?.reset();
-            });
-          },
-          child: Text(
-            _isSignUp ? 'Login' : 'Sign Up',
-            style: const TextStyle(
-              color: _kVioletAccent,
-              fontWeight: FontWeight.w700,
-              fontSize: 13,
-            ),
-          ),
-        ),
-      ],
     );
   }
 
